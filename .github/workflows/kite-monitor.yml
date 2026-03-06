@@ -1,0 +1,30 @@
+name: Kite Monitor — Punta Lara
+
+on:
+  schedule:
+    # Corre cada 30 minutos entre las 7am y las 8pm (hora Argentina = UTC-3)
+    # En UTC: 10:00 a 23:00
+    - cron: '0,30 10-23 * * *'
+  workflow_dispatch: # permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  check-conditions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Chequear condiciones y alertar
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python kite_check.py
