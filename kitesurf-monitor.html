@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kite Monitor — Punta Lara</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ocean: #0a1628; --teal: #00d4c8; --wind: #00a8ff;
+    --go: #00e676; --warn: #ff9100; --stop: #ff1744;
+    --text: #e8f4f8; --muted: #5a7a8a;
+    --card: rgba(255,255,255,0.04); --border: rgba(0,212,200,0.15);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--ocean); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background: radial-gradient(ellipse 80% 50% at 20% 80%, rgba(0,168,255,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0,212,200,0.06) 0%, transparent 50%);
+  }
+  body::after {
+    content:''; position:fixed; bottom:0; left:-100%; width:300%; height:120px; z-index:0; pointer-events:none;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120'%3E%3Cpath d='M0,60 C150,100 350,0 600,60 C850,120 1050,20 1200,60 L1200,120 L0,120 Z' fill='rgba(0,212,200,0.04)'/%3E%3C/svg%3E") repeat-x;
+    animation: wave 8s linear infinite;
+  }
+  @keyframes wave { to { transform:translateX(33.33%); } }
+  .container { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:32px 20px; }
+  header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:40px; }
+  .logo h1 { font-family:'Bebas Neue',sans-serif; font-size:clamp(2.5rem,6vw,4rem); letter-spacing:3px; color:var(--teal); line-height:1; text-shadow:0 0 40px rgba(0,212,200,0.3); }
+  .logo p { color:var(--muted); font-size:0.85rem; letter-spacing:2px; text-transform:uppercase; margin-top:4px; }
+  .status-badge { display:flex; align-items:center; gap:8px; padding:8px 16px; border-radius:100px; font-size:0.8rem; font-weight:500; letter-spacing:1px; text-transform:uppercase; border:1px solid; transition:all 0.5s; }
+  .status-badge.go { background:rgba(0,230,118,0.1); border-color:var(--go); color:var(--go); }
+  .status-badge.warn { background:rgba(255,145,0,0.1); border-color:var(--warn); color:var(--warn); }
+  .status-badge.stop { background:rgba(255,23,68,0.1); border-color:var(--stop); color:var(--stop); }
+  .status-badge .dot { width:8px; height:8px; border-radius:50%; background:currentColor; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+  .update-bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:24px; }
+  .last-update { font-size:0.75rem; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .update-dot { width:6px; height:6px; border-radius:50%; background:var(--go); animation:pulse 2s infinite; }
+  .countdown { font-family:'Bebas Neue',sans-serif; font-size:1rem; color:var(--teal); letter-spacing:1px; }
+  .verdict { border-radius:20px; padding:32px; margin-bottom:28px; border:1px solid; text-align:center; transition:all 0.6s; position:relative; overflow:hidden; }
+  .verdict::before { content:''; position:absolute; inset:0; opacity:0.06; background:radial-gradient(circle at 50% 50%, currentColor, transparent 70%); }
+  .verdict.go { border-color:rgba(0,230,118,0.4); color:var(--go); }
+  .verdict.warn { border-color:rgba(255,145,0,0.4); color:var(--warn); }
+  .verdict.stop { border-color:rgba(255,23,68,0.4); color:var(--stop); }
+  .verdict-icon { font-size:3rem; margin-bottom:8px; }
+  .verdict-text { font-family:'Bebas Neue',sans-serif; font-size:clamp(1.8rem,5vw,2.8rem); letter-spacing:4px; color:inherit; text-shadow:0 0 30px currentColor; }
+  .verdict-sub { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+  .conditions-checklist { display:flex; flex-direction:column; gap:8px; margin-bottom:28px; }
+  .condition-item { display:flex; align-items:center; gap:10px; font-size:0.85rem; padding:10px 14px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); }
+  .ci-text { flex:1; color:var(--text); }
+  .ci-val { font-family:'Bebas Neue',sans-serif; letter-spacing:1px; font-size:1rem; }
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
+  .metric-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px 20px; position:relative; transition:transform 0.2s, border-color 0.3s; }
+  .metric-card:hover { transform:translateY(-2px); }
+  .metric-card.ok { border-color:rgba(0,230,118,0.3); }
+  .metric-card.bad { border-color:rgba(255,23,68,0.3); }
+  .metric-label { font-size:0.7rem; text-transform:uppercase; letter-spacing:2px; color:var(--muted); margin-bottom:12px; }
+  .metric-value { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; line-height:1; letter-spacing:2px; }
+  .metric-value.ok { color:var(--go); } .metric-value.bad { color:var(--stop); } .metric-value.neutral { color:var(--text); }
+  .metric-unit { font-size:0.85rem; color:var(--muted); margin-left:4px; font-family:'DM Sans',sans-serif; }
+  .metric-detail { font-size:0.78rem; color:var(--muted); margin-top:6px; }
+  .metric-status { position:absolute; top:16px; right:16px; font-size:1.1rem; }
+  .wind-bar { background:rgba(255,255,255,0.08); border-radius:100px; height:6px; margin-top:10px; position:relative; overflow:hidden; }
+  .wind-fill { height:100%; border-radius:100px; transition:width 1.5s ease, background 0.5s; }
+  .wind-threshold { position:absolute; top:-3px; height:12px; width:2px; background:var(--go); opacity:0.8; }
+  .compass-wrap { display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .compass { width:48px; height:48px; border-radius:50%; border:1px solid var(--border); position:relative; flex-shrink:0; background:rgba(0,0,0,0.2); }
+  .compass-arrow { position:absolute; top:50%; left:50%; width:2px; height:18px; background:linear-gradient(to top, transparent, var(--wind)); transform-origin:bottom center; border-radius:2px; transition:transform 1s ease; }
+  .compass-center { position:absolute; top:50%; left:50%; width:6px; height:6px; background:var(--teal); border-radius:50%; transform:translate(-50%,-50%); }
+  .compass-n { position:absolute; top:3px; left:50%; transform:translateX(-50%); font-size:8px; color:var(--teal); font-weight:700; }
+  .section-box { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:28px; }
+  .section-title { font-size:0.7rem; text-transform:uppercase; letter-spacing:3px; color:var(--muted); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+  .tide-chart { display:flex; align-items:flex-end; gap:4px; height:60px; margin-bottom:12px; }
+  .tide-bar { flex:1; border-radius:4px 4px 0 0; min-height:4px; transition:all 0.5s; }
+  .tide-bar.current { box-shadow:0 -4px 12px rgba(0,212,200,0.5); }
+  .tide-bar.low { background:linear-gradient(to top, rgba(0,230,118,0.6), rgba(0,230,118,0.2)); }
+  .tide-bar.medium { background:linear-gradient(to top, rgba(255,145,0,0.6), rgba(255,145,0,0.2)); }
+  .tide-bar.high { background:linear-gradient(to top, rgba(255,23,68,0.6), rgba(255,23,68,0.2)); }
+  .tide-times { display:flex; justify-content:space-between; font-size:0.65rem; color:var(--muted); }
+  .forecast-scroll { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; }
+  .forecast-hour { display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 14px; border-radius:12px; border:1px solid transparent; min-width:65px; flex-shrink:0; }
+  .forecast-hour.optimal { background:rgba(0,230,118,0.08); border-color:rgba(0,230,118,0.3); }
+  .fh-time { font-size:0.68rem; color:var(--muted); }
+  .fh-wind { font-family:'Bebas Neue',sans-serif; font-size:1.4rem; color:var(--text); }
+  .fh-dir { font-size:0.68rem; color:var(--muted); }
+  .fh-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .forecast-hour.optimal .fh-dot { background:var(--go); box-shadow:0 0 8px var(--go); }
+  .btn { padding:10px 20px; border-radius:10px; border:none; font-family:'DM Sans',sans-serif; font-weight:500; font-size:0.85rem; cursor:pointer; transition:all 0.2s; letter-spacing:0.5px; }
+  .btn-teal { background:var(--teal); color:var(--ocean); }
+  .btn-teal:hover { background:#00f0e0; transform:translateY(-1px); box-shadow:0 4px 20px rgba(0,212,200,0.3); }
+  .btn-teal.off { background:rgba(255,23,68,0.15); color:var(--stop); border:1px solid rgba(255,23,68,0.4); }
+  .btn-green { background:#25D366; color:white; }
+  .btn-green:hover { background:#20bd5a; transform:translateY(-1px); }
+  .btn-ghost { background:rgba(0,212,200,0.1); border:1px solid rgba(0,212,200,0.3); color:var(--teal); display:flex; align-items:center; gap:6px; font-size:0.8rem; }
+  .btn-ghost:hover { background:rgba(0,212,200,0.2); }
+  .spinning svg { animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  input[type=tel], input[type=text] {
+    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+    padding:10px 14px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:0.88rem; outline:none; transition:border-color 0.2s; width:100%;
+  }
+  input:focus { border-color:var(--teal); }
+  input::placeholder { color:var(--muted); }
+  .toast { position:fixed; bottom:24px; right:24px; padding:14px 20px; border-radius:12px; font-size:0.85rem; font-weight:500; transform:translateY(100px); opacity:0; transition:all 0.3s; z-index:100; max-width:320px; }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .toast.success { background:rgba(0,230,118,0.15); border:1px solid var(--go); color:var(--go); }
+  .toast.error { background:rgba(255,23,68,0.15); border:1px solid var(--stop); color:var(--stop); }
+  footer { text-align:center; padding:24px 0; color:var(--muted); font-size:0.75rem; letter-spacing:1px; line-height:1.8; }
+  @media(max-width:500px) { .metrics{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <h1>KITE MONITOR</h1>
+      <p>Punta Lara — Río de la Plata</p>
+    </div>
+    <div id="statusBadge" class="status-badge stop">
+      <span class="dot"></span>
+      <span id="statusText">Cargando...</span>
+    </div>
+  </header>
+
+  <div class="update-bar">
+    <div class="last-update">
+      <span class="update-dot"></span>
+      Última actualización: <strong id="lastUpdateTime">—</strong>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:0.75rem;color:var(--muted)">Próxima: <span class="countdown" id="countdown">30:00</span></span>
+      <button class="btn btn-ghost" id="refreshBtn" onclick="fetchData()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  <div id="verdict" class="verdict stop">
+    <div class="verdict-icon" id="verdictIcon">⏳</div>
+    <div class="verdict-text" id="verdictText">CARGANDO CONDICIONES...</div>
+    <div class="verdict-sub" id="verdictSub">Consultando datos meteorológicos en tiempo real</div>
+  </div>
+
+  <div class="conditions-checklist" id="checklist"></div>
+
+  <div class="metrics">
+    <div class="metric-card" id="cardWind">
+      <div class="metric-label">🌬️ Velocidad del Viento</div>
+      <div><span class="metric-value neutral" id="windSpeed">—</span><span class="metric-unit">nudos</span></div>
+      <div class="wind-bar">
+        <div class="wind-threshold" id="windThreshold"></div>
+        <div class="wind-fill" id="windFill" style="width:0%"></div>
+      </div>
+      <div class="metric-detail" id="windDetail">Óptimo: ≥10 nudos</div>
+      <div class="metric-status" id="windStatus"></div>
+    </div>
+
+    <div class="metric-card" id="cardDir">
+      <div class="metric-label">🧭 Dirección del Viento</div>
+      <div class="compass-wrap">
+        <div class="compass">
+          <span class="compass-n">N</span>
+          <div class="compass-arrow" id="compassArrow" style="transform:translateX(-50%) rotate(0deg) translateY(-100%)"></div>
+          <div class="compass-center"></div>
+        </div>
+        <div>
+          <div class="metric-value neutral" id="windDir" style="font-size:1.8rem">—</div>
+          <div class="metric-detail" id="windDirDetail">Malo: S / SO / O</div>
+        </div>
+      </div>
+      <div class="metric-status" id="dirStatus"></div>
+    </div>
+
+    <div class="metric-card" id="cardTide">
+      <div class="metric-label">🌊 Marea</div>
+      <div><span class="metric-value neutral" id="tideLevel">—</span><span class="metric-unit">m</span></div>
+      <div class="metric-detail" id="tideDetail">Óptimo: marea baja</div>
+      <div class="metric-status" id="tideStatus"></div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">🌡️ Temperatura</div>
+      <div><span class="metric-value neutral" id="tempVal">—</span><span class="metric-unit">°C</span></div>
+      <div class="metric-detail" id="tempDetail">Sensación: —</div>
+    </div>
+  </div>
+
+  <div class="section-box">
+    <div class="section-title"><span>🌊</span> Mareas del día — La Plata</div>
+    <div class="tide-chart" id="tideChart"></div>
+    <div class="tide-times" id="tideTimes"></div>
+  </div>
+
+  <div class="section-box">
+    <div class="section-title"><span>⏱️</span> Pronóstico por hora — próximas 12h</div>
+    <div class="forecast-scroll" id="forecastScroll"></div>
+  </div>
+
+  <!-- Telegram Instructions -->
+  <div class="section-box">
+    <div class="section-title"><span>✈️</span> Cómo conectar alertas — Telegram</div>
+    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:18px;line-height:1.7">
+      Configurá tu bot de Telegram en 2 minutos y recibís una alerta automática cuando las condiciones sean óptimas:
+    </p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--teal);min-width:22px;line-height:1">1</span>
+        <p style="font-size:0.82rem;line-height:1.6">En Telegram buscá <strong style="color:var(--teal)">@BotFather</strong>, mandále <code style="background:rgba(0,212,200,0.1);color:var(--teal);padding:2px 7px;border-radius:4px">/newbot</code> y seguí los pasos. Te dará un <strong>Token</strong>.</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--teal);min-width:22px;line-height:1">2</span>
+        <p style="font-size:0.82rem;line-height:1.6">Buscá tu bot por el nombre que le pusiste y mandále cualquier mensaje para activarlo.</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--teal);min-width:22px;line-height:1">3</span>
+        <p style="font-size:0.82rem;line-height:1.6">Buscá <strong style="color:var(--teal)">@userinfobot</strong> y mandále cualquier mensaje — te responde con tu <strong>Chat ID</strong>.</p>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--teal);min-width:22px;line-height:1">4</span>
+        <p style="font-size:0.82rem;line-height:1.6">Con el <strong>Token</strong> y el <strong>Chat ID</strong>, podés integrar las alertas automáticas editando las variables <code style="background:rgba(0,212,200,0.1);color:var(--teal);padding:2px 7px;border-radius:4px">TG_TOKEN</code> y <code style="background:rgba(0,212,200,0.1);color:var(--teal);padding:2px 7px;border-radius:4px">TG_CHAT_ID</code> al inicio del código fuente de esta página.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Clima: Open-Meteo API &nbsp;·&nbsp; Mareas: modelo armónico La Plata &nbsp;·&nbsp; Auto-actualización cada 30 min<br>
+    📍 Punta Lara, Buenos Aires — 34.83°S, 57.98°O
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG
+const LAT = -34.83, LON = -57.98, WIND_MIN = 10;
+const TG_TOKEN = '';   // <- pegá acá tu Bot Token
+const TG_CHAT_ID = ''; // <- pegá acá tu Chat ID
+let weatherData = null, countdownSec = 3600, countdownTimer = null, lastNotifDate = null;
+
+// ── FETCH WEATHER
+async function fetchData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+      `&current=temperature_2m,apparent_temperature,wind_speed_10m,wind_direction_10m` +
+      `&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=kn` +
+      `&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=1`;
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    weatherData = await res.json();
+    updateUI(weatherData);
+    resetCountdown();
+    document.getElementById('lastUpdateTime').textContent =
+      new Date().toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+  } catch(e) {
+    showToast('Error de conexión: ' + e.message, 'error');
+    document.getElementById('verdictIcon').textContent = '⚠️';
+    document.getElementById('verdictText').textContent = 'ERROR DE CONEXIÓN';
+    document.getElementById('verdictSub').textContent = 'Verificá tu conexión a internet e intentá de nuevo';
+  }
+  btn.classList.remove('spinning');
+}
+
+// ── HELPERS
+function degToCompass(d) {
+  return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(d/22.5)%16];
+}
+function isGoodDir(d) { return !(d >= 170 && d <= 280); } // Malo: S (170-190), SO (190-250), O (250-280)
+function getTide(h) {
+  const t = h/24;
+  return Math.max(0.05, 0.6 + 0.5*Math.sin(2*Math.PI*t*3.9-1.2) + 0.15*Math.sin(2*Math.PI*t*7.8+0.5));
+}
+function isTideLow(lv) { return lv < 0.55; }
+
+// ── UPDATE UI
+function updateUI(data) {
+  const c = data.current;
+  const wind = c.wind_speed_10m, deg = c.wind_direction_10m;
+  const temp = c.temperature_2m, feels = c.apparent_temperature;
+  const h = new Date().getHours();
+  const tide = getTide(h);
+  const tideOk = isTideLow(tide), dirOk = isGoodDir(deg), windOk = wind >= WIND_MIN;
+  const allGood = windOk && dirOk && tideOk;
+  const partial = (windOk?1:0)+(dirOk?1:0)+(tideOk?1:0) >= 2;
+  const dir = degToCompass(deg);
+
+  // Verdict
+  const st = allGood ? 'go' : partial ? 'warn' : 'stop';
+  document.getElementById('verdict').className = 'verdict ' + st;
+  document.getElementById('statusBadge').className = 'status-badge ' + st;
+  document.getElementById('verdictIcon').textContent = allGood ? '🪁' : partial ? '⚠️' : '🚫';
+  document.getElementById('verdictText').textContent = allGood ? '¡CONDICIONES ÓPTIMAS!' : partial ? 'CONDICIONES PARCIALES' : 'NO RECOMENDADO';
+  document.getElementById('verdictSub').textContent = allGood
+    ? 'Viento del mar, suficiente fuerza y marea baja. ¡A volar!'
+    : partial ? 'Algunas condiciones no son ideales. Evaluá bien antes de salir.'
+    : 'Las condiciones actuales no son aptas para kitesurf.';
+  document.getElementById('statusText').textContent = allGood ? '¡KITE ON!' : partial ? 'Revisar' : 'No apto';
+  if (allGood) checkAndNotify(wind, dir, tide);
+
+  // Checklist
+  document.getElementById('checklist').innerHTML = [
+    [windOk, 'Velocidad del viento (≥10 kn)', `${wind.toFixed(1)} kn`],
+    [dirOk,  'Dirección del viento (no S / SO / O)', `${dir} — ${deg}°`],
+    [tideOk, 'Marea baja (< 0.55 m)', `${tide.toFixed(2)} m`],
+  ].map(([ok, label, val]) => `
+    <div class="condition-item">
+      <span>${ok?'✅':'❌'}</span>
+      <span class="ci-text">${label}</span>
+      <span class="ci-val" style="color:${ok?'var(--go)':'var(--stop)'}">${val}</span>
+    </div>`).join('');
+
+  // Wind card
+  const maxWind = Math.max(30, wind * 1.3);
+  const pct = Math.min(100, (wind/maxWind)*100);
+  document.getElementById('windThreshold').style.left = (WIND_MIN/maxWind*100) + '%';
+  document.getElementById('windFill').style.width = pct + '%';
+  document.getElementById('windFill').style.background = windOk
+    ? 'linear-gradient(to right, rgba(0,230,118,0.5), var(--go))'
+    : 'linear-gradient(to right, rgba(0,168,255,0.4), var(--wind))';
+  document.getElementById('windSpeed').textContent = wind.toFixed(1);
+  document.getElementById('windSpeed').className = 'metric-value ' + (windOk?'ok':'bad');
+  document.getElementById('windStatus').textContent = windOk?'✅':'❌';
+  document.getElementById('windDetail').textContent = windOk ? `✓ Suficiente (${wind.toFixed(1)} ≥ ${WIND_MIN} kn)` : `✗ Flojo — necesitás ≥${WIND_MIN} kn`;
+  document.getElementById('cardWind').className = 'metric-card ' + (windOk?'ok':'bad');
+
+  // Dir card
+  document.getElementById('windDir').textContent = dir;
+  document.getElementById('windDir').className = 'metric-value ' + (dirOk?'ok':'bad');
+  document.getElementById('dirStatus').textContent = dirOk?'✅':'❌';
+  document.getElementById('windDirDetail').textContent = dirOk ? `✓ Bueno para navegar (${deg}°)` : `✗ ${dir} (${deg}°) — S / SO / O: no apto`;
+  document.getElementById('cardDir').className = 'metric-card ' + (dirOk?'ok':'bad');
+  document.getElementById('compassArrow').style.transform = `translateX(-50%) rotate(${deg}deg) translateY(-100%)`;
+
+  // Tide card
+  document.getElementById('tideLevel').textContent = tide.toFixed(2);
+  document.getElementById('tideLevel').className = 'metric-value ' + (tideOk?'ok':'bad');
+  document.getElementById('tideStatus').textContent = tideOk?'✅':'❌';
+  document.getElementById('tideDetail').textContent = tideOk ? '✓ Marea baja (< 0.55 m)' : '✗ Marea alta — esperá que baje';
+  document.getElementById('cardTide').className = 'metric-card ' + (tideOk?'ok':'bad');
+
+  // Temp
+  document.getElementById('tempVal').textContent = temp.toFixed(0);
+  document.getElementById('tempDetail').textContent = `Sensación: ${feels.toFixed(0)}°C`;
+
+  buildTideChart(h);
+  buildForecast(data, h);
+}
+
+function buildTideChart(now) {
+  const chart = document.getElementById('tideChart');
+  const timesEl = document.getElementById('tideTimes');
+  chart.innerHTML = ''; timesEl.innerHTML = '';
+  const levels = Array.from({length:24}, (_,i) => getTide(i));
+  const max = Math.max(...levels);
+  levels.forEach((lv, h) => {
+    const bar = document.createElement('div');
+    bar.className = 'tide-bar ' + (lv<0.55?'low':lv<0.85?'medium':'high') + (h===now?' current':'');
+    bar.style.height = (lv/max*100)+'%';
+    bar.title = `${h}:00 — ${lv.toFixed(2)}m`;
+    chart.appendChild(bar);
+  });
+  [0,6,12,18,23].forEach(h => {
+    const s = document.createElement('span');
+    s.textContent = h+':00';
+    timesEl.appendChild(s);
+  });
+}
+
+function buildForecast(data, now) {
+  const scroll = document.getElementById('forecastScroll');
+  scroll.innerHTML = '';
+  const spds = data.hourly.wind_speed_10m;
+  const dirs = data.hourly.wind_direction_10m;
+  const ts = data.hourly.time;
+  for (let i = now; i < Math.min(now+12, spds.length); i++) {
+    const spd = spds[i], deg = dirs[i];
+    const hour = new Date(ts[i]).getHours();
+    const optimal = spd >= WIND_MIN && isGoodDir(deg) && isTideLow(getTide(hour));
+    const el = document.createElement('div');
+    el.className = 'forecast-hour' + (optimal?' optimal':'');
+    el.innerHTML = `<span class="fh-time">${hour}:00</span><span class="fh-wind">${spd.toFixed(0)}</span><span class="fh-dir">${degToCompass(deg)}</span><span class="fh-dot"></span>`;
+    scroll.appendChild(el);
+  }
+}
+
+// ── TELEGRAM AUTO-NOTIFY
+function buildMsg(wind, dir, tide) {
+  const now = new Date().toLocaleString('es-AR', {dateStyle:'short', timeStyle:'short'});
+  return `🪁 KITE MONITOR — PUNTA LARA%0A%0A✅ ¡CONDICIONES ÓPTIMAS!%0A%0A🌬 Viento: ${wind.toFixed(1)} nudos%0A🧭 Dirección: ${dir}%0A🌊 Marea: ${tide.toFixed(2)}m (baja)%0A%0A¡Es momento de salir a kitesurf! 🏄%0A%0A${encodeURIComponent(now)}`;
+}
+
+function sendTelegramMsg(wind, dir, tide) {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  // Use an img tag trick to bypass CORS for GET requests to Telegram
+  const text = buildMsg(wind, dir, tide);
+  const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage?chat_id=${TG_CHAT_ID}&text=${text}`;
+  const img = new Image();
+  img.src = url;
+  // Also try fetch (works when served from a server, not file://)
+  fetch(url, { mode: 'no-cors' }).catch(() => {});
+}
+
+function checkAndNotify(wind, dir, tide) {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  const today = new Date().toDateString();
+  if (lastNotifDate === today) return;
+  lastNotifDate = today;
+  sendTelegramMsg(wind, dir, tide);
+  showToast('📨 Alerta enviada a Telegram!', 'success');
+}
+
+// ── COUNTDOWN
+function resetCountdown() {
+  countdownSec = 1800;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    countdownSec--;
+    if (countdownSec <= 0) { 
+fetchData();
+startTelegramPolling(); return; }
+    const m = String(Math.floor(countdownSec/60)).padStart(2,'0');
+    const s = String(countdownSec%60).padStart(2,'0');
+    document.getElementById('countdown').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.className = `toast ${type}`, 3500);
+}
+
+
+fetchData();
+startTelegramPolling();
+
+// ── TELEGRAM BOT POLLING (responde consultas)
+let lastUpdateId = 0;
+
+function buildStatusMsg() {
+  if (!weatherData) return 'No hay datos disponibles todavía.';
+  const c = weatherData.current;
+  const wind = c.wind_speed_10m, deg = c.wind_direction_10m;
+  const h = new Date().getHours();
+  const tide = getTide(h);
+  const windOk = wind >= WIND_MIN;
+  const dirOk = isGoodDir(deg);
+  const tideOk = isTideLow(tide);
+  const allGood = windOk && dirOk && tideOk;
+  const dir = degToCompass(deg);
+  const now = new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+
+  return (allGood
+    ? `🪁 ¡SÍ, ES ÓPTIMO PARA NAVEGAR!%0A%0A`
+    : `🚫 No es óptimo por ahora.%0A%0A`) +
+    `${windOk?'✅':'❌'} Viento: ${wind.toFixed(1)} kn ${windOk?'(OK)':'(necesitás ≥10 kn)'}%0A` +
+    `${dirOk?'✅':'❌'} Dirección: ${dir} ${dirOk?'(OK)':'(S/SO/O: no apto)'}%0A` +
+    `${tideOk?'✅':'❌'} Marea: ${tide.toFixed(2)}m ${tideOk?'(baja ✓)':'(alta, esperá que baje)'}%0A%0A` +
+    `🕐 Actualizado: ${now}`;
+}
+
+async function checkTelegramMessages() {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  try {
+    const url = `https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=5`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok || !data.result.length) return;
+
+    for (const update of data.result) {
+      lastUpdateId = update.update_id;
+      const text = update.message?.text?.toLowerCase().trim() || '';
+      const chatId = update.message?.chat?.id;
+      if (!chatId) continue;
+
+      // Respond to any message asking about conditions
+      const triggers = ['hola', 'estado', 'condiciones', 'navegar', 'kite', 'viento', 'si', 'sí', '?', 'puedo', 'como', 'cómo'];
+      const shouldRespond = triggers.some(t => text.includes(t)) || text.length > 0;
+
+      if (shouldRespond) {
+        const reply = buildStatusMsg();
+        const replyUrl = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage?chat_id=${chatId}&text=${reply}`;
+        await fetch(replyUrl);
+      }
+    }
+  } catch(e) { /* silencioso */ }
+}
+
+function startTelegramPolling() {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  // Poll every 5 seconds for new messages
+  setInterval(checkTelegramMessages, 5000);
+}
+</script>
+</body>
+</html>
